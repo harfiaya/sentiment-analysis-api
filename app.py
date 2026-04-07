@@ -1,4 +1,3 @@
-
 import os
 import torch
 from transformers import AutoModel, AutoTokenizer
@@ -6,29 +5,22 @@ import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import urllib.request
 import gdown
 
 app = FastAPI()
 
-# تحميل النماذج من Google Drive عند بدء التشغيل
-print("🔄 جاري تحميل النماذج من Google Drive...")
+# معرفات الملفات من Google Drive (عدلها حسب ملفاتك)
+MODEL_ID = "YOUR_MODEL_FILE_ID"
+SCALER_ID = "YOUR_SCALER_FILE_ID"
 
-# استخدم هذا الرابط المباشر (بدل YOUR_FILE_ID بمعرف ملفك)
-# ملاحظة: يجب أن يكون الملف عاماً (Anyone with link can download)
-
-# رابط تحميل مباشر من Google Drive
-MODEL_URL = "https://drive.google.com/uc?export=download&id=YOUR_FILE_ID"
-SCALER_URL = "https://drive.google.com/uc?export=download&id=YOUR_SCALER_ID"
-
-# تحميل النموذج
-urllib.request.urlretrieve(MODEL_URL, "model.pkl")
-urllib.request.urlretrieve(SCALER_URL, "scaler.pkl")
+# تحميل النماذج من Google Drive
+if not os.path.exists("model.pkl"):
+    gdown.download(f"https://drive.google.com/uc?id={MODEL_ID}", "model.pkl", quiet=False)
+if not os.path.exists("scaler.pkl"):
+    gdown.download(f"https://drive.google.com/uc?id={SCALER_ID}", "scaler.pkl", quiet=False)
 
 classifier = joblib.load("model.pkl")
 scaler = joblib.load("scaler.pkl")
-
-print("✅ تم تحميل النماذج بنجاح")
 
 # تحميل نموذج MARBERT
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
