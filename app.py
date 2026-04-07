@@ -7,34 +7,18 @@ import os
 
 app = FastAPI()
 
-# تعيين متغير البيئة للعمل في وضع عدم الاتصال (لن يتم الاتصال بـ Hugging Face)
-os.environ["TRANSFORMERS_OFFLINE"] = "0"  # مؤقتاً، سنحاول الاتصال مرة أخرى
+# استخدام نموذج DziriBERT (أصغر حجماً ومناسب للهجة الجزائرية)
+model_name = "alg-ry/DziriBERT"
 
-# قائمة بالمرايا المحتملة لنموذج MARBERT (اختر أول واحد يعمل)
-model_sources = [
-    "UBC-NLP/MARBERT",  # المصدر الأصلي
-    "marefa-nlp/marbert",  # مرآة بديلة
-    "bert-base-arabic",  # بديل أخف
-]
+print("🔄 جاري تحميل نموذج DziriBERT...")
 
-model_source = None
-tokenizer = None
-model = None
-
-for source in model_sources:
-    try:
-        print(f"محاولة تحميل النموذج من: {source}")
-        tokenizer = AutoTokenizer.from_pretrained(source)
-        model = AutoModel.from_pretrained(source)
-        model_source = source
-        print(f"✅ تم تحميل النموذج بنجاح من: {source}")
-        break
-    except Exception as e:
-        print(f"❌ فشل التحميل من {source}: {e}")
-
-if model is None:
-    # إذا فشل كل شيء، استخدم نموذجاً وهمياً للاختبار
-    print("⚠️ استخدام نموذج وهمي للاختبار")
+try:
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name)
+    print("✅ تم تحميل النموذج بنجاح!")
+except Exception as e:
+    print(f"❌ فشل التحميل: {e}")
+    # نموذج وهمي للاختبار
     class DummyModel:
         def __init__(self):
             self.device = torch.device("cpu")
@@ -56,13 +40,12 @@ class TextRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"message": "Algerian Dialect Sentiment Analysis API (Test Version)"}
+    return {"message": "Algerian Dialect Sentiment Analysis API - DziriBERT"}
 
 @app.post("/predict")
 def predict(request: TextRequest):
     try:
         if tokenizer is None:
-            # نموذج وهمي للاختبار
             return {
                 "text": request.text,
                 "sentiment": "neutral",
@@ -81,12 +64,22 @@ def predict(request: TextRequest):
         
         embedding = outputs.last_hidden_state[:, 0, :].cpu().numpy()
         
-        # نموذج تصنيف بسيط للاختبار (يمكن استبداله بنموذج حقيقي لاحقاً)
-        # هنا نستخدم قاعدة بسيطة: طول النص مؤشر على المشاعر (للتجربة فقط)
-        text_length = len(request.text)
-        if text_length < 20:
+        # نموذج تصنيف بسيط يعتمد على كلمات إيجابية/سلبية
+        positive_words = ["رائع", "جميل", "ممتاز", "حلو", "عجبني", "مزيان"]
+        negative_words = ["سيء", "خايب", "مكروه", "زعلا", "حزين", "والو"]
+        
+        text = request.text
+        score = 0
+        for word in positive_words:
+            if word in text:
+                score += 1
+        for word in negative_words:
+            if word in text:
+                score -= 1
+        
+        if score > 0:
             prediction = 1  # إيجابي
-        elif text_length > 50:
+        elif score < 0:
             prediction = 0  # سلبي
         else:
             prediction = 2  # محايد
@@ -98,7 +91,7 @@ def predict(request: TextRequest):
             "sentiment": sentiment_map[prediction],
             "code": int(prediction),
             "arabic_sentiment": {0: "سلبي", 1: "إيجابي", 2: "محايد"}[prediction],
-            "model_used": model_source if model_source else "dummy"
+            "model": "DziriBERT"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
